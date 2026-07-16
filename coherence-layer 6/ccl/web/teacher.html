@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Curriculum Coherence Layer</title>
+<style>
+  :root {
+    --paper:#F5F7FA; --surface:#FFFFFF; --ink:#16203A; --muted:#5A6785;
+    --line:#E2E6EF; --primary:#4338CA; --primary-soft:#ECEBFB;
+    --teal:#0F766E; --teal-bg:#E6F4F1; --slate:#475569; --slate-bg:#EEF1F5;
+    --amber:#B45309; --amber-bg:#FBEEDB; --rose:#B91C1C; --rose-bg:#FBE7E7;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+         font-size:15px; line-height:1.5; }
+  a { color:var(--primary); }
+  header { display:flex; align-items:center; gap:16px; padding:14px 22px;
+           background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  .brand { font-weight:700; letter-spacing:-0.02em; font-size:16px; }
+  .brand small { display:block; font-family:var(--mono); font-size:10px; letter-spacing:0.08em;
+                 text-transform:uppercase; color:var(--muted); font-weight:500; }
+  .provider { margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--muted);
+              background:var(--paper); border:1px solid var(--line); padding:5px 10px; border-radius:999px; }
+  nav { display:flex; gap:4px; padding:0 18px; background:var(--surface); border-bottom:1px solid var(--line); }
+  nav button { border:0; background:none; padding:12px 16px; font-family:var(--mono); font-size:12px;
+               letter-spacing:0.04em; text-transform:uppercase; color:var(--muted); cursor:pointer;
+               border-bottom:2px solid transparent; }
+  nav button.active { color:var(--primary); border-bottom-color:var(--primary); }
+  main { max-width:1120px; margin:0 auto; padding:26px 22px 80px; }
+  .tab { display:none; } .tab.active { display:block; }
+  h2 { font-size:22px; letter-spacing:-0.02em; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px;
+          padding:18px 20px; margin-bottom:18px; }
+  .card h3 { margin:0 0 12px; font-size:14px; font-family:var(--mono); letter-spacing:0.03em;
+             text-transform:uppercase; color:var(--muted); }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  input, select, textarea { width:100%; font-family:var(--sans); font-size:14px; color:var(--ink);
+    padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+  textarea { resize:vertical; min-height:70px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:150px; }
+  button.act { background:var(--primary); color:#fff; border:0; padding:9px 16px; border-radius:8px;
+    font-weight:600; cursor:pointer; font-size:14px; margin-top:14px; }
+  button.act.ghost { background:var(--primary-soft); color:var(--primary); }
+  button.act:disabled { opacity:.5; cursor:not-allowed; }
+  .chip { display:inline-block; font-family:var(--mono); font-size:11px; padding:2px 8px; border-radius:6px;
+          margin-right:6px; }
+  .chip.preferred{color:var(--teal);background:var(--teal-bg);} .chip.allowed{color:var(--slate);background:var(--slate-bg);}
+  .chip.notyet{color:var(--amber);background:var(--amber-bg);} .chip.prohibited{color:var(--rose);background:var(--rose-bg);}
+  .note { font-size:12px; color:var(--muted); margin-top:6px; }
+  .ok { color:var(--teal); } .bad { color:var(--rose); }
+  .violation { font-family:var(--mono); font-size:12px; color:var(--rose); background:var(--rose-bg);
+    padding:6px 10px; border-radius:6px; margin-top:6px; }
+  /* tutor */
+  .tutorgrid { display:grid; grid-template-columns:1fr 340px; gap:18px; }
+  @media (max-width:820px){ .tutorgrid{ grid-template-columns:1fr; } }
+  .log { min-height:220px; display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
+  .msg { padding:10px 13px; border-radius:12px; max-width:88%; animation:fade .25s ease; }
+  @keyframes fade { from{opacity:0; transform:translateY(4px);} to{opacity:1;} }
+  .msg.student { align-self:flex-end; background:var(--primary-soft); }
+  .msg.tutor { align-self:flex-start; background:var(--paper); border:1px solid var(--line); }
+  .msg .who { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:3px; }
+  .gov h4 { font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
+            color:var(--muted); margin:0 0 8px; }
+  .ladder { display:flex; flex-direction:column; gap:3px; margin-bottom:14px; }
+  .rung { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+  .rung .dot { width:20px; height:14px; border-radius:4px; background:var(--line); flex:0 0 auto; text-align:center;
+               font-family:var(--mono); font-size:9px; line-height:14px; color:#fff; }
+  .rung.on .dot { background:var(--primary); } .rung.on { color:var(--ink); }
+  .rung.ceiling .dot { outline:2px solid var(--amber); }
+  .stamp { font-family:var(--mono); font-size:12px; padding:6px 10px; border-radius:6px; display:inline-block; margin-bottom:12px; }
+  .stamp.pass { color:var(--teal); background:var(--teal-bg); } .stamp.fall { color:var(--rose); background:var(--rose-bg); }
+  .cite { font-family:var(--mono); font-size:12px; color:var(--teal); }
+  .rule { font-family:var(--mono); font-size:11px; color:var(--slate); display:block; }
+  .empty { color:var(--muted); font-size:13px; padding:12px; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Teacher Console<small>curriculum coherence layer</small></div>
+  <a href="/" style="margin-left:auto; font-size:12px;">Switch interface</a>
+  <div class="provider" id="provider">…</div>
+</header>
+<nav>
+  <button data-tab="studio" class="active">Studio</button>
+  <button data-tab="tutor">Tutor preview</button>
+  <button data-tab="insights">Insights</button>
+</nav>
+<div id="stubBanner" style="display:none; background:var(--amber-bg); color:var(--amber); font-family:var(--mono); font-size:12px; padding:9px 22px; border-bottom:1px solid var(--line);"></div>
+<main>
+  <!-- STUDIO -->
+  <section class="tab active" id="tab-studio">
+    <h2>Teacher Studio</h2>
+    <p class="sub">Wire your course rules into a contract, then publish it. The tutor obeys only what you publish.</p>
+
+    <div class="card">
+      <h3>Course</h3>
+      <div class="row">
+        <div><label>Work on course</label><select id="studioCourse"></select></div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div><label>New course id</label><input id="ncId" placeholder="e.g. bio_101"></div>
+        <div><label>Name</label><input id="ncName" placeholder="Biology 101"></div>
+        <div><label>Subject</label><input id="ncSubject" placeholder="biology"></div>
+      </div>
+      <button class="act ghost" onclick="createCourse()">Add course</button>
+      <div class="note" id="courseMsg"></div>
+    </div>
+
+    <div class="card">
+      <h3>Materials</h3>
+      <div id="materialList" class="note"></div>
+      <p class="note" style="margin-top:10px;">Add material one of two ways below — you only need <b>one</b>. The title names the material; everything else is handled for you.</p>
+      <label>Title</label>
+      <input id="matTitle" placeholder="e.g. Unit 1 notes">
+      <label style="margin-top:12px;">Option A — upload a file (.pdf, .txt, .md)</label>
+      <input type="file" id="matFile" accept=".pdf,.txt,.md,.csv,.html" onchange="uploadFile()">
+      <label style="margin-top:12px;">Option B — paste text (blank lines split it into citable pages)</label>
+      <textarea id="matText" placeholder="Paste lesson notes here. Each paragraph becomes a citable page (p1, p2, …)."></textarea>
+      <button class="act ghost" onclick="addMaterial()">Add pasted text</button>
+      <div class="note" id="matMsg"></div>
+    </div>
+
+    <div class="card">
+      <h3>Curriculum contract</h3>
+      <p class="note" style="margin-bottom:12px;">The contract is the set of rules your tutor follows for this course: which method students should use, which method to <b>hold back</b> until a later unit, anything <b>never</b> allowed, and how much help the tutor may give in each mode. Compile a draft from your materials, adjust it, approve it, and publish. The tutor obeys only what you publish.</p>
+      <button class="act ghost" onclick="compile()">Compile a draft from materials</button>
+      <div id="draftForm" style="margin-top:8px;"></div>
+    </div>
+  </section>
+
+  <!-- TUTOR -->
+  <section class="tab" id="tab-tutor">
+    <h2>Tutor preview</h2>
+    <p class="sub">Preview what a student would experience, with the full governance panel. Students use the separate Student app; this is your test bench.</p>
+    <div class="row">
+      <div><label>Course</label><select id="tutorCourse"></select></div>
+      <div><label>Mode</label><select id="tutorMode" onchange="modeHelp()">
+        <option value="learn">Learn</option><option value="practice" selected>Practice</option>
+        <option value="review">Review</option><option value="assessment">Assessment</option></select></div>
+      <div><label>Current unit</label><input id="tutorUnit" placeholder="unit_3"></div>
+    </div>
+    <div class="note" id="modeHelp" style="margin-top:8px;"></div>
+    <div class="note" style="margin-top:4px;">Current unit tells the tutor where the class is in the sequence, so a "hold back until unit 6" method is refused in unit 3 but allowed later.</div>
+    <div class="note" id="tutorSources" style="margin-top:6px;"></div>
+    <div class="tutorgrid" style="margin-top:16px;">
+      <div class="card">
+        <div class="log" id="log"><div class="empty">Ask a question below to start.</div></div>
+        <label>Your work so far (optional) — the tutor sees your effort before deciding how much help to give</label>
+        <textarea id="attempt" placeholder="Type what you've tried…"></textarea>
+        <label>Attach a photo of your work (optional)</label>
+        <input type="file" id="attemptImg" accept="image/*">
+        <div class="note" id="visionNote"></div>
+        <label style="margin-top:8px;">Your question</label>
+        <input id="message" placeholder="e.g. Can I just use the cross product here?" onkeydown="if(event.key==='Enter')sendTutor()">
+        <button class="act" onclick="sendTutor()" id="sendBtn">Send</button>
+      </div>
+      <div class="card gov">
+        <h4>Governance</h4>
+        <div id="governance"><div class="empty">The tutor's reasoning appears here.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section class="tab" id="tab-insights">
+    <h2>Weekly insight brief</h2>
+    <p class="sub">Aggregate patterns from tutor use — never individual students. Needs some tutor activity first.</p>
+    <div class="row"><div><label>Course</label><select id="insightCourse"></select></div></div>
+    <button class="act ghost" onclick="buildInsights()">Build brief</button>
+    <button class="act ghost" onclick="simulateClass()" style="margin-left:8px;">Simulate a class (demo)</button>
+    <div class="note">Patterns surface only above a minimum of 5 distinct students (a privacy default), so a single tester sees nothing. "Simulate a class" runs the tutor as several synthetic students to populate the brief.</div>
+    <div id="insightBody" style="margin-top:14px;"></div>
+  </section>
+</main>
+
+<script>
+const HINTS = ["Diagnose","Prompt attempt","Conceptual hint","Partial step","Analogous example","Full solution"];
+let STATE = {courses:[]};
+let DRAFT = null;
+
+async function api(path, body){
+  try {
+    const payload = Object.assign({role:"teacher"}, body||{});
+    const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
+    return await r.json();
+  } catch(e){ return {error:"Couldn't reach the server ("+e+"). Is it still running in your terminal?"}; }
+}
+async function getState(){ STATE = await (await fetch("/api/state")).json(); render(); }
+
+function courseOptions(sel, keepValue){
+  const cur = keepValue ? sel.value : null;
+  sel.innerHTML = STATE.courses.map(c=>`<option value="${c.id}">${c.name} (${c.id})</option>`).join("");
+  if(cur) sel.value = cur;
+}
+function currentCourse(id){ return STATE.courses.find(c=>c.id===id); }
+
+function render(){
+  document.getElementById("provider").textContent = STATE.provider || "";
+  const stub = (STATE.provider||"").toLowerCase().includes("stub");
+  const banner = document.getElementById("stubBanner");
+  banner.style.display = stub ? "block" : "none";
+  banner.textContent = "Offline demo model: replies are canned and won't help a stuck student. Set ANTHROPIC_API_KEY in this terminal and restart (python -m ccl.web) for real tutoring.";
+  ["studioCourse","tutorCourse","insightCourse"].forEach(id=>courseOptions(document.getElementById(id), true));
+  renderMaterials();
+  renderTutorSources();
+  modeHelp();
+  const vn = document.getElementById("visionNote");
+  if(vn) vn.innerHTML = STATE.vision ? "Photos are read by the live model." :
+    "<span class='bad'>Photo reading needs the live model — set ANTHROPIC_API_KEY and restart. On the offline stub the photo is ignored.</span>";
+}
+function modeHelp(){
+  const map = {
+    learn:"Learn — the tutor can walk through the full solution, but only after you've made a real effort.",
+    practice:"Practice — hints only; it guides you without giving the final answer.",
+    review:"Review — consolidation before a test; full solutions can unlock.",
+    assessment:"Assessment — minimal help (clarify directions only), to protect test integrity."
+  };
+  const el = document.getElementById("modeHelp");
+  if(el) el.textContent = map[val("tutorMode")] || "";
+}
+async function readAttemptImage(){
+  const f = document.getElementById("attemptImg").files[0];
+  if(!f) return null;
+  return new Promise(res=>{
+    const r = new FileReader();
+    r.onload = ()=> res({media_type: f.type || "image/png", data_b64: r.result.split(",")[1]});
+    r.onerror = ()=> res(null);
+    r.readAsDataURL(f);
+  });
+}
+function renderTutorSources(){
+  const c = currentCourse(document.getElementById("tutorCourse").value);
+  const el = document.getElementById("tutorSources");
+  if(!el) return;
+  if(!c || !c.published_version){ el.innerHTML = "<span class='bad'>No published contract — publish one in Studio first.</span>"; return; }
+  const srcs = (c.published_sources||[]).join(", ") || "none";
+  el.innerHTML = `Tutor uses published contract v${c.published_version}. Active sources: <span class="cite">${srcs}</span>. Materials you add only take effect after you Compile &amp; Publish again.`;
+}
+function renderMaterials(){
+  const c = currentCourse(document.getElementById("studioCourse").value);
+  const el = document.getElementById("materialList");
+  if(!c || !c.materials.length){ el.textContent = "No materials yet — add one below."; return; }
+  el.innerHTML = c.materials.map(m=>`<div><b>${esc(m.title)}</b> · ${m.anchors.length} pages</div>`).join("");
+}
+
+/* tabs */
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  document.getElementById("tab-"+b.dataset.tab).classList.add("active");
+  if(b.dataset.tab==="tutor") syncTutorUnit();
+});
+document.getElementById("studioCourse").onchange = renderMaterials;
+document.getElementById("tutorCourse").onchange = renderTutorSources;
+
+/* file upload */
+async function uploadFile(){
+  const input = document.getElementById("matFile");
+  const file = input.files[0]; if(!file) return;
+  const base = file.name.replace(/\.[^.]+$/,"");
+  const title = (val("matTitle")||base).trim();
+  const course_id = val("studioCourse");
+  const done = (r)=>{ msg("matMsg", r.error || `Added "${title}" (${r.pages} pages). Now Compile & Publish below to activate it for the Tutor.`, !!r.error);
+                      if(!r.error){ input.value=""; ["matTitle","matText"].forEach(clear); getState(); } };
+  if(file.name.toLowerCase().endsWith(".pdf")){
+    msg("matMsg","Reading PDF…",false);
+    const reader = new FileReader();
+    reader.onload = async ()=>{ const b64 = reader.result.split(",")[1];
+      done(await api("/api/upload", {course_id, title, kind:"pdf", data_b64:b64})); };
+    reader.readAsDataURL(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = async ()=>{ done(await api("/api/upload", {course_id, title, kind:"text", text:reader.result})); };
+    reader.readAsText(file);
+  }
+}
+
+/* insights: simulate a class so the brief has data */
+async function simulateClass(){
+  const box = document.getElementById("insightBody");
+  box.innerHTML = "<div class='note'>Running the tutor as several students…</div>";
+  const r = await api("/api/simulate", {course_id:val("insightCourse"), n:6});
+  if(r.error){ box.innerHTML = `<div class="note bad">${r.error}</div>`; return; }
+  buildInsights();
+}
+
+/* studio: course + material */
+async function createCourse(){
+  const r = await api("/api/course", {course_id:val("ncId"), name:val("ncName"), subject:val("ncSubject")});
+  msg("courseMsg", r.error || `Added course ${r.course_id}.`, !!r.error);
+  if(!r.error){ ["ncId","ncName","ncSubject"].forEach(clear); await getState(); }
+}
+async function addMaterial(){
+  const text = val("matText").trim();
+  if(!text){ msg("matMsg", "Paste some text here, or use Option A to upload a file — you only need one.", true); return; }
+  const title = (val("matTitle")||"Pasted material").trim();
+  const r = await api("/api/material", {course_id:val("studioCourse"), title, text});
+  msg("matMsg", r.error || `Added ${(r.pages||0)} pages. Now Compile & Publish below to activate it for the Tutor.`, !!r.error);
+  if(!r.error){ ["matTitle","matText"].forEach(clear); await getState(); }
+}
+
+/* studio: compile + edit + publish */
+async function compile(){
+  const course = val("studioCourse");
+  const c = currentCourse(course);
+  const btn = event && event.target;
+  if(btn) btn.textContent = "Reading materials…";
+  const r = await api("/api/compile", {course_id:course, title:(c&&c.name)||"", grade_band:"9-12"});
+  if(btn) btn.textContent = "Compile a draft from materials";
+  DRAFT = r.draft;
+  renderDraftForm(r.used_llm);
+}
+function anchorOptions(course){
+  const c = currentCourse(course); let opts = [];
+  (c ? c.materials : []).forEach(m => m.anchors.forEach(a => opts.push(`${m.id}:${a}`)));
+  return opts;
+}
+function renderDraftForm(usedLlm){
+  const course = val("studioCourse");
+  const anchors = anchorOptions(course);
+  const pref = (DRAFT.methods.preferred[0]||{});
+  const ny = (DRAFT.methods.not_yet_introduced[0]||{});
+  const pr = (DRAFT.methods.prohibited[0]||{});
+  const ped = DRAFT.pedagogy.maximum_hint_level_by_mode;
+  const status = usedLlm
+    ? `<div class="note ok">Drafted from your materials by the model — review and edit everything below before publishing.</div>`
+    : `<div class="note">Seeded a blank draft (the model wasn't available). Fill in the pedagogy below.</div>`;
+  document.getElementById("draftForm").innerHTML = status + `
+    <label>Course title (what students see)</label>
+    <input id="dTitle" value="${esc(DRAFT.scope.title)}">
+    <label>Main concept this contract governs</label>
+    <input id="dConcept" value="${esc(DRAFT.scope.concepts[0].name)}">
+    <div class="row">
+      <div>
+        <label><span class="chip preferred">preferred</span> Method students should use</label>
+        <input id="dPrefName" value="${esc(pref.name||'Course-approved method')}">
+      </div>
+      <div>
+        <label>Backed by source</label>
+        <select id="dPrefSrc">${anchors.map(a=>`<option ${((pref.source_refs||[])[0]===a)?'selected':''}>${a}</option>`).join("")||'<option value="">(add a material first)</option>'}</select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label><span class="chip notyet">not yet</span> Method to hold back (optional)</label>
+        <input id="dNotYetName" value="${esc(ny.name||'')}" placeholder="e.g. cross product">
+      </div>
+      <div><label>Until unit</label><input id="dNotYetUnit" value="${esc(ny.until_unit||'unit_2')}"></div>
+    </div>
+    <label>What the tutor says when a student asks for the held-back method</label>
+    <input id="dNotYetMsg" value="${esc(ny.response_rule||"That method is outside this unit's sequence. Use the course-approved method instead.")}">
+    <div class="row">
+      <div><label><span class="chip prohibited">prohibited</span> Method never allowed (optional)</label>
+      <input id="dProhib" value="${esc(pr.name||'')}" placeholder="leave blank if none"></div>
+    </div>
+    <label>How much help the tutor may give, by mode (1 diagnose … 6 full solution)</label>
+    <div class="row">
+      <div><label>Learn</label><input id="hLearn" type="number" min="1" max="6" value="${ped.learn}"></div>
+      <div><label>Practice</label><input id="hPractice" type="number" min="1" max="6" value="${ped.practice}"></div>
+      <div><label>Review</label><input id="hReview" type="number" min="1" max="6" value="${ped.review}"></div>
+      <div><label>Assessment</label><input id="hAssess" type="number" min="1" max="6" value="${ped.assessment}"></div>
+    </div>
+    <label style="margin-top:14px;"><input type="checkbox" id="dApprove" style="width:auto;margin-right:6px;">
+      I have reviewed the concept graph and approve it for publishing</label>
+    <button class="act" onclick="publish()">Publish contract</button>
+    <div id="publishMsg"></div>`;
+}
+function publish(){
+  const conceptName = val("dConcept");
+  DRAFT.scope.title = val("dTitle");
+  DRAFT.scope.concepts[0].name = conceptName;
+  const cid = DRAFT.scope.concepts[0].id;
+  // preferred
+  const src = val("dPrefSrc");
+  DRAFT.methods.preferred = [{
+    id:"course_method", name:val("dPrefName"), applies_to:[cid],
+    source_refs: src ? [src] : []
+  }];
+  // not-yet
+  const nyName = val("dNotYetName").trim();
+  DRAFT.methods.not_yet_introduced = nyName ? [{
+    id:"not_yet_"+slug(nyName), name:nyName, until_unit:val("dNotYetUnit")||"unit_2",
+    applies_to:[cid], response_rule:val("dNotYetMsg")
+  }] : [];
+  // prohibited
+  const prName = val("dProhib").trim();
+  DRAFT.methods.prohibited = prName ? [{id:"prohibited_"+slug(prName), name:prName, applies_to:[cid]}] : [];
+  // ceilings
+  DRAFT.pedagogy.maximum_hint_level_by_mode = {
+    learn:int("hLearn"), practice:int("hPractice"), review:int("hReview"), assessment:int("hAssess")};
+  DRAFT.concept_graph_approved = document.getElementById("dApprove").checked;
+
+  api("/api/publish", {contract:DRAFT}).then(r=>{
+    const box = document.getElementById("publishMsg");
+    if(r.published){ box.innerHTML = `<div class="note ok">Published version ${r.version}. Try it in the Tutor tab.</div>`; getState(); }
+    else { box.innerHTML = "<div class='note bad'>Not published — fix these:</div>" +
+      r.violations.map(v=>`<div class="violation">${v.code}: ${v.detail}</div>`).join(""); }
+  });
+}
+
+/* tutor */
+let SESSION = null;
+function syncTutorUnit(){
+  const c = currentCourse(val("tutorCourse"));
+  if(c && !val("tutorUnit")) document.getElementById("tutorUnit").value = "unit_3";
+}
+async function sendTutor(){
+  const text = val("message"); if(!text.trim()) return;
+  const attempt_image = await readAttemptImage();
+  addMsg("student", text + (attempt_image ? "  📎 photo attached" : ""));
+  clear("message"); document.getElementById("sendBtn").disabled = true;
+  const pending = addMsg("tutor", "thinking… (the live model can take a few seconds)");
+  pending.style.opacity = "0.6";
+  const r = await api("/api/tutor", {course_id:val("tutorCourse"), mode:val("tutorMode"),
+    current_unit:val("tutorUnit"), message:text, attempt:val("attempt"),
+    attempt_image, session_id:SESSION});
+  document.getElementById("sendBtn").disabled = false;
+  pending.remove();
+  if(r.error){ addMsg("tutor", "⚠ " + r.error); return; }
+  SESSION = r.session_id;
+  addMsg("tutor", r.response_text);
+  renderGovernance(r);
+  document.getElementById("attemptImg").value = "";
+}
+function addMsg(who, text){
+  const log = document.getElementById("log");
+  if(log.querySelector(".empty")) log.innerHTML="";
+  const d = document.createElement("div"); d.className="msg "+who;
+  d.innerHTML = `<div class="who">${who}</div>${esc(text)}`;
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+  return d;
+}
+function renderGovernance(r){
+  const ladder = HINTS.map((h,i)=>{
+    const lvl=i+1; const on = lvl<=r.hint_level ? "on":""; const ceil = lvl===r.max_hint_level?"ceiling":"";
+    return `<div class="rung ${on} ${ceil}"><span class="dot">${lvl}</span>${h}${ceil?" · ceiling":""}</div>`;
+  }).join("");
+  const cites = (r.citations||[]).map(c=>`<div class="cite">${c.source_id}:${c.anchor}</div>`).join("") || "<div class='note'>none</div>";
+  const rules = (r.policy_rules||[]).map(x=>`<span class="rule">${x}</span>`).join("") || "<div class='note'>none</div>";
+  const stamp = r.verifier_passed
+     ? `<div class="stamp pass">verifier: PASS · ${r.outcome}</div>`
+     : `<div class="stamp fall">verifier: blocked → safe fallback</div>`;
+  document.getElementById("governance").innerHTML =
+    `${stamp}<h4>Hint ladder</h4><div class="ladder">${ladder}</div>
+     <h4>Citations</h4>${cites}<h4 style="margin-top:12px;">Policy rules fired</h4>${rules}`;
+}
+
+/* insights */
+async function buildInsights(){
+  const r = await api("/api/insights", {course_id:val("insightCourse")});
+  const box = document.getElementById("insightBody");
+  if(r.error){ box.innerHTML = `<div class="note">${r.error}</div>`; return; }
+  const a = r.activity || {};
+  const concepts = (a.by_concept||[]).map(c=>`<div>• ${c.count} question${c.count===1?"":"s"} about <b>${esc(c.concept)}</b></div>`).join("") || "<div class='note'>No questions yet.</div>";
+  let html = `<div class="card"><h3>Activity this week</h3>
+    <div class="note" style="margin-bottom:8px;">De-identified counts — no individual student is named.</div>
+    <div>${a.total_questions||0} questions from ${a.distinct_students||0} student${a.distinct_students===1?"":"s"} ·
+      ${a.full_solution_requests||0} asked for the full answer · ${a.out_of_scope||0} out of scope</div>
+    <div style="margin-top:8px;">${concepts}</div></div>`;
+
+  const all = [...r.misconception_clusters, ...r.full_solution_pressure, ...r.prerequisite_gaps];
+  if(all.length){
+    html += `<div class="note" style="margin:10px 0 4px;">Patterns (5+ students — enough to infer safely):</div>` +
+      all.map(v=>`<div class="card"><div class="chip notyet">${v.type}</div> <b>${esc(v.concept)}</b>
+        <div style="margin:6px 0;">${esc(v.summary)}</div>
+        <div class="note">confidence ${v.confidence} · cohort ${v.sample_size} students</div>
+        <div style="margin-top:6px;"><b>Suggested:</b> ${esc(v.recommendation)}</div></div>`).join("");
+  } else {
+    html += `<div class="note" style="margin-top:10px;">No inferred patterns yet — those appear once at least 5 students hit the same issue (a privacy floor). Use "Simulate a class" to see one.</div>`;
+  }
+  box.innerHTML = html;
+}
+
+/* helpers */
+function val(id){ return document.getElementById(id).value; }
+function int(id){ return parseInt(val(id),10); }
+function clear(id){ document.getElementById(id).value=""; }
+function esc(s){ return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,""); }
+function msg(id,text,bad){ const e=document.getElementById(id); e.textContent=text; e.className="note "+(bad?"bad":"ok"); }
+
+getState();
+</script>
+</body>
+</html>

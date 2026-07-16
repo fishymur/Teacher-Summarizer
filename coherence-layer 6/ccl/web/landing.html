@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Curriculum Coherence Layer</title>
+<style>
+  :root{ --paper:#F5F7FA; --surface:#FFFFFF; --ink:#16203A; --muted:#5A6785; --line:#E2E6EF;
+         --primary:#4338CA; --primary-soft:#ECEBFB; --teal:#0F766E;
+         --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+         --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; min-height:100vh; background:var(--paper); color:var(--ink); font-family:var(--sans);
+        display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; }
+  .brand{ font-weight:700; font-size:20px; letter-spacing:-0.02em; }
+  .brand small{ display:block; font-family:var(--mono); font-size:11px; letter-spacing:0.08em;
+                text-transform:uppercase; color:var(--muted); font-weight:500; margin-top:2px; }
+  .lead{ color:var(--muted); margin:14px 0 28px; max-width:440px; text-align:center; }
+  .cards{ display:flex; gap:18px; flex-wrap:wrap; justify-content:center; }
+  .pick{ display:block; width:260px; background:var(--surface); border:1px solid var(--line);
+         border-radius:14px; padding:22px; text-decoration:none; color:inherit; transition:.15s; }
+  .pick:hover{ border-color:var(--primary); transform:translateY(-2px); }
+  .pick h2{ margin:0 0 6px; font-size:17px; }
+  .pick p{ margin:0; color:var(--muted); font-size:14px; }
+  .tag{ font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em;
+        color:var(--primary); background:var(--primary-soft); padding:3px 8px; border-radius:6px; }
+  .provider{ margin-top:26px; font-family:var(--mono); font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+  <div class="brand">Curriculum Coherence Layer<small>executable pedagogy</small></div>
+  <p class="lead">Two separate interfaces. Teachers author the course rules; students learn under them.</p>
+  <div class="cards">
+    <a class="pick" href="/teacher">
+      <div class="tag">teacher</div>
+      <h2 style="margin-top:10px;">Teacher console</h2>
+      <p>Author materials and the curriculum contract, preview the tutor, and read the weekly insight brief.</p>
+    </a>
+    <a class="pick" href="/student">
+      <div class="tag">student</div>
+      <h2 style="margin-top:10px;">Student tutor</h2>
+      <p>Get guided help on your course — hints, sources, and honest push toward doing the work yourself.</p>
+    </a>
+  </div>
+  <div class="provider" id="provider">…</div>
+<script>
+  fetch("/api/state").then(r=>r.json()).then(s=>{
+    document.getElementById("provider").textContent = "Model: " + (s.provider||"");
+  }).catch(()=>{});
+</script>
+</body>
+</html>
