@@ -1,0 +1,5 @@
+#!/bin/sh
+# Auto-refresh the HANDOFF.md snapshot on every commit.
+# Enable once with:  git config core.hooksPath scripts  &&  chmod +x scripts/pre-commit
+python3 scripts/update_handoff.py || exit 0
+git add HANDOFF.md 2>/dev/null || true
