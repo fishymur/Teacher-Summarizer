@@ -62,9 +62,9 @@ class Workspace:
 
     # --- courses & materials ------------------------------------------------
 
-    def create_course(self, course_id: str, name: str, subject: str) -> Course:
+    def create_course(self, course_id: str, name: str) -> Course:
         self._ac.require(self._p, Permission.COURSE_CREATE, action="create_course")
-        course = Course(id=course_id, name=name, subject=subject)
+        course = Course(id=course_id, name=name)
         self._repo.add(course)
         self._repo.flush()
         return course

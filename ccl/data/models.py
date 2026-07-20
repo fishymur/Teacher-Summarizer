@@ -61,7 +61,6 @@ class Course(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("school_tenant.id"), index=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    subject: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class Section(Base):

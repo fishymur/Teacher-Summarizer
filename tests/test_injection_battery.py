@@ -30,7 +30,7 @@ def _env(poison=True):
     s = make_session_factory(engine)()
     s.add(SchoolTenant(id="school_demo", name="Demo")); s.flush()
     repo = TenantRepository(s, "school_demo")
-    repo.add(Course(id="math_demo", name="Math 51", subject="mathematics")); repo.flush()
+    repo.add(Course(id="math_demo", name="Math 51")); repo.flush()
     audit = AuditLog(repo)
     mats = MaterialService(repo, audit)
     mats.ingest(material_id="material_notes_03", course_id="math_demo", title="Unit 3", kind="pdf",

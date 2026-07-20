@@ -132,7 +132,7 @@ class AppState:
         self.repo.add(User(id="student_demo", tenant_id="school_demo",
                            email="student@demo.school", display_name="Demo Student"))
         self.repo.flush()
-        self.repo.add(Course(id="math_demo", name="Math 51", subject="mathematics"))
+        self.repo.add(Course(id="math_demo", name="Math 51"))
         self.repo.flush()
         self.materials.ingest(
             material_id="material_notes_03", course_id="math_demo", title="Unit 3 notes", kind="pdf",
@@ -168,7 +168,7 @@ def get_state(app: AppState) -> dict:
     for c in app.repo.list(Course):
         published = app.contracts.get_published(c.id)
         courses.append({
-            "id": c.id, "name": c.name, "subject": c.subject,
+            "id": c.id, "name": c.name,
             "published_version": published.version if published else None,
             "published_title": published.scope.title if published else None,
             "published_sources": published.source_policy.approved_material_ids if published else [],
@@ -195,7 +195,7 @@ def create_course(app: AppState, body: dict) -> dict:
     cid = body["course_id"].strip()
     if app.repo.get(Course, cid):
         return {"error": f"A course with id {cid!r} already exists."}
-    app.repo.add(Course(id=cid, name=body.get("name", cid), subject=body.get("subject", "")))
+    app.repo.add(Course(id=cid, name=body.get("name", cid)))
     app.repo.flush()
     return {"ok": True, "course_id": cid}
 
@@ -271,6 +271,28 @@ def _ingest_text(app: AppState, body: dict, text: str) -> dict:
     return {"ok": True, "pages": len(chunks), "material_id": material_id}
 
 
+def delete_material(app: AppState, body: dict) -> dict:
+    """Remove a material and its versions/anchors/chunks from the course."""
+    from ..data.models import Material, MaterialVersion, SourceAnchor, SourceChunk
+    material_id = (body.get("material_id") or "").strip()
+    m = app.repo.get(Material, material_id)
+    if m is None:
+        return {"error": "That material no longer exists."}
+    title = m.title
+    for v in app.repo.list(MaterialVersion, material_id=material_id):
+        for ch in app.repo.list(SourceChunk, material_version_id=v.id):
+            app.session.delete(ch)
+        for a in app.repo.list(SourceAnchor, material_version_id=v.id):
+            app.session.delete(a)
+        app.session.delete(v)
+    app.session.delete(m)
+    app.repo.flush()
+    # Warn if a live contract still points at it — the tutor needs a re-publish.
+    published = app.contracts.get_published(body.get("course_id", ""))
+    referenced = published and material_id in (published.source_policy.approved_material_ids or [])
+    return {"ok": True, "material_id": material_id, "title": title, "was_published_source": bool(referenced)}
+
+
 def simulate_class(app: AppState, body: dict) -> dict:
     """Demo helper: run the tutor as several synthetic students so the aggregate
     brief has enough distinct students (>=5) to surface a pattern. Uses the
@@ -312,13 +334,15 @@ def publish_contract(app: AppState, body: dict) -> dict:
         contract = CurriculumContract.model_validate(body["contract"])
     except Exception as e:  # noqa: BLE001
         return {"published": False, "violations": [{"code": "schema", "detail": str(e)}]}
+    return _publish_validated(app, contract)
 
+
+def _publish_validated(app: AppState, contract: CurriculumContract) -> dict:
     resolver = DBAnchorResolver(app.repo)
     result = validate_for_publish(contract, resolver)
     if not result.is_valid:
         return {"published": False,
                 "violations": [{"code": v.code.value, "detail": v.detail} for v in result.violations]}
-
     # Fresh id per publish so each is a new, superseding version.
     if app.repo.get(CurriculumContractRow, contract.contract_id):
         contract = contract.model_copy(update={"contract_id": f"{contract.contract_id}x"})
@@ -327,6 +351,59 @@ def publish_contract(app: AppState, body: dict) -> dict:
     app.contracts.approve(contract.contract_id, approved_by="teacher_demo")
     app.contracts.publish(contract.contract_id, actor_id="teacher_demo")
     return {"published": True, "version": contract.version}
+
+
+_HELP_PRESETS = {  # hint ceiling (1 diagnose … 6 full solution) per mode
+    "minimal":  {"learn": 4, "practice": 3, "review": 4, "assessment": 2},
+    "balanced": {"learn": 6, "practice": 5, "review": 6, "assessment": 2},
+    "generous": {"learn": 6, "practice": 6, "review": 6, "assessment": 3},
+}
+
+
+def _apply_preferences(draft: CurriculumContract, prefs: dict) -> CurriculumContract:
+    """Fold the teacher's optional, plain-language preferences into an auto-draft.
+    Everything here is optional; defaults leave the model to work from material."""
+    ceilings = dict(_HELP_PRESETS.get((prefs.get("help_level") or "balanced").lower(),
+                                      _HELP_PRESETS["balanced"]))
+    if prefs.get("allow_full_solutions") is False:
+        ceilings = {mode: min(v, 5) for mode, v in ceilings.items()}  # 6 == full solution
+    ped = draft.pedagogy.model_copy(update={"maximum_hint_level_by_mode": ceilings})
+
+    methods = draft.methods
+    concept_id = draft.scope.concepts[0].id if draft.scope.concepts else "concept_main"
+    never = (prefs.get("never_allowed") or "").strip()
+    if never:
+        from ..contracts.schema import ProhibitedMethod
+        methods = methods.model_copy(update={"prohibited": [ProhibitedMethod(
+            id="prohibited_" + _slug(never), name=never, applies_to=[concept_id])]})
+
+    return draft.model_copy(update={"pedagogy": ped, "methods": methods,
+                                    "concept_graph_approved": True})
+
+
+def publish_course(app: AppState, body: dict) -> dict:
+    """One-step publish for the material-first flow: auto-draft the contract from
+    the uploaded material, fold in any optional preferences, and publish. The
+    tutor then works from the course material; preferences only add guardrails."""
+    course_id = body["course_id"]
+    mats = list_course_materials(app.repo, course_id)
+    if not any(m["anchors"] for m in mats):
+        return {"published": False,
+                "violations": [{"code": "materials",
+                                "detail": "Add at least one material to this course first — "
+                                          "the tutor teaches from it."}]}
+    published = app.contracts.get_published(course_id)
+    next_version = (published.version + 1) if published else 1
+    from ..compiler.llm import llm_draft_contract
+    draft, used_llm = llm_draft_contract(
+        app.provider, app.repo, course_id=course_id,
+        contract_id=f"{course_id}_v{next_version}",
+        title=body.get("title", ""), grade_band=body.get("grade_band", "9-12"))
+    draft = draft.model_copy(update={"version": next_version})
+    draft = _apply_preferences(draft, body.get("preferences") or {})
+    out = _publish_validated(app, draft)
+    out["used_llm"] = used_llm
+    return out
 
 
 # --- tutor ------------------------------------------------------------------

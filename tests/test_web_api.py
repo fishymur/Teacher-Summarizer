@@ -36,7 +36,7 @@ def test_tutor_enforces_seeded_contract():
 
 def test_full_authoring_and_publish_flow():
     app = _app()
-    assert "error" not in api.create_course(app, {"course_id": "bio_101", "name": "Biology", "subject": "biology"})
+    assert "error" not in api.create_course(app, {"course_id": "bio_101", "name": "Biology"})
     api.add_material(app, {"course_id": "bio_101", "material_id": "cell_notes",
                            "title": "Cell notes", "text": "The cell is the unit of life.\n\nMitochondria make ATP."})
     draft = api.compile_draft(app, {"course_id": "bio_101", "title": "Biology 101"})["draft"]
@@ -59,7 +59,7 @@ def test_full_authoring_and_publish_flow():
 
 def test_tutor_without_contract_is_guided_not_crashed():
     app = _app()
-    api.create_course(app, {"course_id": "empty_course", "name": "Empty", "subject": "x"})
+    api.create_course(app, {"course_id": "empty_course", "name": "Empty"})
     r = api.tutor(app, {"course_id": "empty_course", "mode": "practice", "message": "help"})
     assert "error" in r and "publish" in r["error"].lower()
 
@@ -74,7 +74,7 @@ def test_insights_returns_structure():
 
 def test_upload_text_file_and_activate():
     app = _app()
-    api.create_course(app, {"course_id": "hist_1", "name": "History", "subject": "history"})
+    api.create_course(app, {"course_id": "hist_1", "name": "History"})
     r = api.upload_material(app, {"course_id": "hist_1", "material_id": "ww1", "title": "WW1",
                                   "kind": "text", "text": "Causes.\n\nAlliances.\n\nTrench warfare."})
     assert r["ok"] and r["pages"] == 3
@@ -155,7 +155,7 @@ def test_role_separation_permissions():
 
 def test_student_state_hides_unpublished_and_details():
     app = _app()
-    api.create_course(app, {"course_id": "draft_course", "name": "Draft", "subject": "x"})
+    api.create_course(app, {"course_id": "draft_course", "name": "Draft"})
     ss = api.student_state(app)
     ids = [c["id"] for c in ss["courses"]]
     assert "math_demo" in ids          # published seed course is visible

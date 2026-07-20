@@ -70,7 +70,7 @@ def repo(session):
         r.add(User(id=uid, tenant_id="school_demo",
                    email=f"{uid}@demo.school", display_name=uid))
     r.flush()
-    r.add(Course(id="math_demo", name="Math 51", subject="mathematics"))
+    r.add(Course(id="math_demo", name="Math 51"))
     r.flush()
     return r
 

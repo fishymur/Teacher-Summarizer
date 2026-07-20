@@ -95,7 +95,7 @@
   <!-- STUDIO -->
   <section class="tab active" id="tab-studio">
     <h2>Teacher Studio</h2>
-    <p class="sub">Wire your course rules into a contract, then publish it. The tutor obeys only what you publish.</p>
+    <p class="sub">Add your course material, then publish. The tutor teaches from what you upload and cites it.</p>
 
     <div class="card">
       <h3>Course</h3>
@@ -105,31 +105,51 @@
       <div class="row" style="margin-top:12px;">
         <div><label>New course id</label><input id="ncId" placeholder="e.g. bio_101"></div>
         <div><label>Name</label><input id="ncName" placeholder="Biology 101"></div>
-        <div><label>Subject</label><input id="ncSubject" placeholder="biology"></div>
       </div>
       <button class="act ghost" onclick="createCourse()">Add course</button>
       <div class="note" id="courseMsg"></div>
     </div>
 
     <div class="card">
-      <h3>Materials</h3>
-      <div id="materialList" class="note"></div>
-      <p class="note" style="margin-top:10px;">Add material one of two ways below — you only need <b>one</b>. The title names the material; everything else is handled for you.</p>
-      <label>Title</label>
-      <input id="matTitle" placeholder="e.g. Unit 1 notes">
-      <label style="margin-top:12px;">Option A — upload a file (.pdf, .txt, .md)</label>
-      <input type="file" id="matFile" accept=".pdf,.txt,.md,.csv,.html" onchange="uploadFile()">
-      <label style="margin-top:12px;">Option B — paste text (blank lines split it into citable pages)</label>
-      <textarea id="matText" placeholder="Paste lesson notes here. Each paragraph becomes a citable page (p1, p2, …)."></textarea>
-      <button class="act ghost" onclick="addMaterial()">Add pasted text</button>
-      <div class="note" id="matMsg"></div>
+      <h3>Class materials</h3>
+      <p class="note">The notes and files the tutor teaches from. Add or remove them here.</p>
+      <div id="materialList" class="note" style="margin-top:8px;"></div>
+
+      <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:14px;">
+        <label>Title (required)</label>
+        <input id="matTitle" placeholder="e.g. Unit 1 notes">
+        <p class="note" style="margin-top:10px;">Then add the content <b>one</b> of two ways — you only need one:</p>
+
+        <label style="margin-top:6px;">Option A — upload a file (.pdf, .txt, .md)</label>
+        <input type="file" id="matFile" accept=".pdf,.txt,.md,.csv,.html" onchange="stageFile()">
+        <div id="fileStaged" class="note" style="display:none; margin-top:8px;"></div>
+
+        <label style="margin-top:12px;">Option B — paste text (blank lines split it into citable pages)</label>
+        <textarea id="matText" placeholder="Paste lesson notes here. Each paragraph becomes a citable page (p1, p2, …)." oninput="onPasteInput()"></textarea>
+        <button class="act ghost" onclick="addMaterial()">Add pasted text</button>
+        <div class="note" id="matMsg"></div>
+      </div>
     </div>
 
     <div class="card">
-      <h3>Curriculum contract</h3>
-      <p class="note" style="margin-bottom:12px;">The contract is the set of rules your tutor follows for this course: which method students should use, which method to <b>hold back</b> until a later unit, anything <b>never</b> allowed, and how much help the tutor may give in each mode. Compile a draft from your materials, adjust it, approve it, and publish. The tutor obeys only what you publish.</p>
-      <button class="act ghost" onclick="compile()">Compile a draft from materials</button>
-      <div id="draftForm" style="margin-top:8px;"></div>
+      <h3>Publish to students</h3>
+      <p class="note">The tutor answers from the material above and makes the teaching calls itself — citing your material and not giving away answers when it shouldn't. Publish to turn it on for students; re-publish whenever you change materials.</p>
+      <details style="margin:12px 0;">
+        <summary style="cursor:pointer; color:var(--accent);">Teaching preferences (optional)</summary>
+        <div style="margin-top:12px;">
+          <label>How much help should the tutor give?</label>
+          <select id="prefHelp">
+            <option value="minimal">Minimal — nudges and questions, rarely the answer</option>
+            <option value="balanced" selected>Balanced — hints that build toward the answer</option>
+            <option value="generous">Generous — fuller guidance, quicker to walk through steps</option>
+          </select>
+          <label style="margin-top:12px;"><input type="checkbox" id="prefFull" checked style="width:auto;margin-right:6px;">Allow a full worked solution after a real attempt</label>
+          <label style="margin-top:12px;">A method the tutor should never use (optional)</label>
+          <input id="prefNever" placeholder="leave blank if none — e.g. cross product">
+        </div>
+      </details>
+      <button class="act" onclick="publishCourse()">Publish for students</button>
+      <div id="publishMsg" class="note"></div>
     </div>
   </section>
 
@@ -142,10 +162,8 @@
       <div><label>Mode</label><select id="tutorMode" onchange="modeHelp()">
         <option value="learn">Learn</option><option value="practice" selected>Practice</option>
         <option value="review">Review</option><option value="assessment">Assessment</option></select></div>
-      <div><label>Current unit</label><input id="tutorUnit" placeholder="unit_3"></div>
     </div>
     <div class="note" id="modeHelp" style="margin-top:8px;"></div>
-    <div class="note" style="margin-top:4px;">Current unit tells the tutor where the class is in the sequence, so a "hold back until unit 6" method is refused in unit 3 but allowed later.</div>
     <div class="note" id="tutorSources" style="margin-top:6px;"></div>
     <div class="tutorgrid" style="margin-top:16px;">
       <div class="card">
@@ -239,13 +257,28 @@ function renderTutorSources(){
   if(!el) return;
   if(!c || !c.published_version){ el.innerHTML = "<span class='bad'>No published contract — publish one in Studio first.</span>"; return; }
   const srcs = (c.published_sources||[]).join(", ") || "none";
-  el.innerHTML = `Tutor uses published contract v${c.published_version}. Active sources: <span class="cite">${srcs}</span>. Materials you add only take effect after you Compile &amp; Publish again.`;
+  el.innerHTML = `Tutor uses published contract v${c.published_version}. Active sources: <span class="cite">${srcs}</span>. Materials you add only take effect after you Publish again.`;
 }
 function renderMaterials(){
   const c = currentCourse(document.getElementById("studioCourse").value);
   const el = document.getElementById("materialList");
   if(!c || !c.materials.length){ el.textContent = "No materials yet — add one below."; return; }
-  el.innerHTML = c.materials.map(m=>`<div><b>${esc(m.title)}</b> · ${m.anchors.length} pages</div>`).join("");
+  el.innerHTML = c.materials.map(m=>
+    `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);">
+       <span style="flex:1;"><b>${esc(m.title)}</b> · ${m.anchors.length} pages</span>
+       <button class="act ghost" style="width:auto;padding:3px 12px;font-size:12px;" onclick="removeMaterial('${m.id}')">Remove</button>
+     </div>`).join("");
+}
+async function removeMaterial(id){
+  const c = currentCourse(val("studioCourse"));
+  const m = c && c.materials.find(x=>x.id===id);
+  const title = m ? m.title : id;
+  if(!confirm(`Remove "${title}" from this course? This can't be undone.`)) return;
+  const r = await api("/api/material/delete", {course_id:val("studioCourse"), material_id:id});
+  if(r.error){ msg("matMsg", r.error, true); return; }
+  msg("matMsg", `Removed "${r.title}".` + (r.was_published_source
+        ? " It was part of your published course — click Publish again to update what students see." : ""), false);
+  await getState();
 }
 
 /* tabs */
@@ -259,27 +292,46 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
 document.getElementById("studioCourse").onchange = renderMaterials;
 document.getElementById("tutorCourse").onchange = renderTutorSources;
 
-/* file upload */
-async function uploadFile(){
+/* file upload — stage first, ingest only on confirm; one-of with paste */
+let STAGED = null;
+function stageFile(){
   const input = document.getElementById("matFile");
-  const file = input.files[0]; if(!file) return;
+  const file = input.files[0];
+  const box = document.getElementById("fileStaged");
+  if(!file){ STAGED=null; box.style.display="none"; return; }
+  const ta = document.getElementById("matText"); ta.value=""; ta.disabled=true;
   const base = file.name.replace(/\.[^.]+$/,"");
-  const title = (val("matTitle")||base).trim();
-  const course_id = val("studioCourse");
-  const done = (r)=>{ msg("matMsg", r.error || `Added "${title}" (${r.pages} pages). Now Compile & Publish below to activate it for the Tutor.`, !!r.error);
-                      if(!r.error){ input.value=""; ["matTitle","matText"].forEach(clear); getState(); } };
-  if(file.name.toLowerCase().endsWith(".pdf")){
-    msg("matMsg","Reading PDF…",false);
-    const reader = new FileReader();
-    reader.onload = async ()=>{ const b64 = reader.result.split(",")[1];
-      done(await api("/api/upload", {course_id, title, kind:"pdf", data_b64:b64})); };
-    reader.readAsDataURL(file);
-  } else {
-    const reader = new FileReader();
-    reader.onload = async ()=>{ done(await api("/api/upload", {course_id, title, kind:"text", text:reader.result})); };
-    reader.readAsText(file);
-  }
+  const isPdf = file.name.toLowerCase().endsWith(".pdf");
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    STAGED = isPdf ? {kind:"pdf", data_b64:reader.result.split(",")[1], base}
+                   : {kind:"text", text:reader.result, base};
+    box.style.display="block";
+    box.innerHTML = `Ready to add: <b>${esc(file.name)}</b>. `
+      + `<button class="act" style="width:auto;padding:4px 12px;" onclick="confirmUpload()">Confirm upload</button> `
+      + `<button class="act ghost" style="width:auto;padding:4px 12px;" onclick="cancelUpload()">Cancel</button>`;
+  };
+  if(isPdf) reader.readAsDataURL(file); else reader.readAsText(file);
 }
+function cancelUpload(){
+  STAGED=null;
+  document.getElementById("matFile").value="";
+  document.getElementById("fileStaged").style.display="none";
+  document.getElementById("matText").disabled=false;
+}
+async function confirmUpload(){
+  if(!STAGED) return;
+  const course_id = val("studioCourse");
+  const title = (val("matTitle")||STAGED.base).trim();
+  msg("matMsg", STAGED.kind==="pdf" ? "Reading PDF…" : "Adding…", false);
+  const payload = STAGED.kind==="pdf"
+    ? {course_id, title, kind:"pdf", data_b64:STAGED.data_b64}
+    : {course_id, title, kind:"text", text:STAGED.text};
+  const r = await api("/api/upload", payload);
+  msg("matMsg", r.error || `Added "${title}" (${r.pages} pages). Publish below to update what students see.`, !!r.error);
+  if(!r.error){ cancelUpload(); clear("matTitle"); getState(); }
+}
+function onPasteInput(){ if(val("matText").trim() && STAGED) cancelUpload(); }
 
 /* insights: simulate a class so the brief has data */
 async function simulateClass(){
@@ -292,124 +344,47 @@ async function simulateClass(){
 
 /* studio: course + material */
 async function createCourse(){
-  const r = await api("/api/course", {course_id:val("ncId"), name:val("ncName"), subject:val("ncSubject")});
+  const r = await api("/api/course", {course_id:val("ncId"), name:val("ncName")});
   msg("courseMsg", r.error || `Added course ${r.course_id}.`, !!r.error);
-  if(!r.error){ ["ncId","ncName","ncSubject"].forEach(clear); await getState(); }
+  if(!r.error){ ["ncId","ncName"].forEach(clear); await getState(); }
 }
 async function addMaterial(){
+  if(STAGED){ msg("matMsg", "You have a file staged above — click Confirm upload, or Cancel to paste instead.", true); return; }
   const text = val("matText").trim();
   if(!text){ msg("matMsg", "Paste some text here, or use Option A to upload a file — you only need one.", true); return; }
   const title = (val("matTitle")||"Pasted material").trim();
   const r = await api("/api/material", {course_id:val("studioCourse"), title, text});
-  msg("matMsg", r.error || `Added ${(r.pages||0)} pages. Now Compile & Publish below to activate it for the Tutor.`, !!r.error);
+  msg("matMsg", r.error || `Added ${(r.pages||0)} pages. Publish below to update what students see.`, !!r.error);
   if(!r.error){ ["matTitle","matText"].forEach(clear); await getState(); }
 }
 
-/* studio: compile + edit + publish */
-async function compile(){
+/* studio: publish (material-first — the tutor teaches from your material) */
+async function publishCourse(){
   const course = val("studioCourse");
   const c = currentCourse(course);
+  const prefs = {
+    help_level: val("prefHelp"),
+    allow_full_solutions: document.getElementById("prefFull").checked,
+    never_allowed: val("prefNever")
+  };
   const btn = event && event.target;
-  if(btn) btn.textContent = "Reading materials…";
-  const r = await api("/api/compile", {course_id:course, title:(c&&c.name)||"", grade_band:"9-12"});
-  if(btn) btn.textContent = "Compile a draft from materials";
-  DRAFT = r.draft;
-  renderDraftForm(r.used_llm);
-}
-function anchorOptions(course){
-  const c = currentCourse(course); let opts = [];
-  (c ? c.materials : []).forEach(m => m.anchors.forEach(a => opts.push(`${m.id}:${a}`)));
-  return opts;
-}
-function renderDraftForm(usedLlm){
-  const course = val("studioCourse");
-  const anchors = anchorOptions(course);
-  const pref = (DRAFT.methods.preferred[0]||{});
-  const ny = (DRAFT.methods.not_yet_introduced[0]||{});
-  const pr = (DRAFT.methods.prohibited[0]||{});
-  const ped = DRAFT.pedagogy.maximum_hint_level_by_mode;
-  const status = usedLlm
-    ? `<div class="note ok">Drafted from your materials by the model — review and edit everything below before publishing.</div>`
-    : `<div class="note">Seeded a blank draft (the model wasn't available). Fill in the pedagogy below.</div>`;
-  document.getElementById("draftForm").innerHTML = status + `
-    <label>Course title (what students see)</label>
-    <input id="dTitle" value="${esc(DRAFT.scope.title)}">
-    <label>Main concept this contract governs</label>
-    <input id="dConcept" value="${esc(DRAFT.scope.concepts[0].name)}">
-    <div class="row">
-      <div>
-        <label><span class="chip preferred">preferred</span> Method students should use</label>
-        <input id="dPrefName" value="${esc(pref.name||'Course-approved method')}">
-      </div>
-      <div>
-        <label>Backed by source</label>
-        <select id="dPrefSrc">${anchors.map(a=>`<option ${((pref.source_refs||[])[0]===a)?'selected':''}>${a}</option>`).join("")||'<option value="">(add a material first)</option>'}</select>
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label><span class="chip notyet">not yet</span> Method to hold back (optional)</label>
-        <input id="dNotYetName" value="${esc(ny.name||'')}" placeholder="e.g. cross product">
-      </div>
-      <div><label>Until unit</label><input id="dNotYetUnit" value="${esc(ny.until_unit||'unit_2')}"></div>
-    </div>
-    <label>What the tutor says when a student asks for the held-back method</label>
-    <input id="dNotYetMsg" value="${esc(ny.response_rule||"That method is outside this unit's sequence. Use the course-approved method instead.")}">
-    <div class="row">
-      <div><label><span class="chip prohibited">prohibited</span> Method never allowed (optional)</label>
-      <input id="dProhib" value="${esc(pr.name||'')}" placeholder="leave blank if none"></div>
-    </div>
-    <label>How much help the tutor may give, by mode (1 diagnose … 6 full solution)</label>
-    <div class="row">
-      <div><label>Learn</label><input id="hLearn" type="number" min="1" max="6" value="${ped.learn}"></div>
-      <div><label>Practice</label><input id="hPractice" type="number" min="1" max="6" value="${ped.practice}"></div>
-      <div><label>Review</label><input id="hReview" type="number" min="1" max="6" value="${ped.review}"></div>
-      <div><label>Assessment</label><input id="hAssess" type="number" min="1" max="6" value="${ped.assessment}"></div>
-    </div>
-    <label style="margin-top:14px;"><input type="checkbox" id="dApprove" style="width:auto;margin-right:6px;">
-      I have reviewed the concept graph and approve it for publishing</label>
-    <button class="act" onclick="publish()">Publish contract</button>
-    <div id="publishMsg"></div>`;
-}
-function publish(){
-  const conceptName = val("dConcept");
-  DRAFT.scope.title = val("dTitle");
-  DRAFT.scope.concepts[0].name = conceptName;
-  const cid = DRAFT.scope.concepts[0].id;
-  // preferred
-  const src = val("dPrefSrc");
-  DRAFT.methods.preferred = [{
-    id:"course_method", name:val("dPrefName"), applies_to:[cid],
-    source_refs: src ? [src] : []
-  }];
-  // not-yet
-  const nyName = val("dNotYetName").trim();
-  DRAFT.methods.not_yet_introduced = nyName ? [{
-    id:"not_yet_"+slug(nyName), name:nyName, until_unit:val("dNotYetUnit")||"unit_2",
-    applies_to:[cid], response_rule:val("dNotYetMsg")
-  }] : [];
-  // prohibited
-  const prName = val("dProhib").trim();
-  DRAFT.methods.prohibited = prName ? [{id:"prohibited_"+slug(prName), name:prName, applies_to:[cid]}] : [];
-  // ceilings
-  DRAFT.pedagogy.maximum_hint_level_by_mode = {
-    learn:int("hLearn"), practice:int("hPractice"), review:int("hReview"), assessment:int("hAssess")};
-  DRAFT.concept_graph_approved = document.getElementById("dApprove").checked;
-
-  api("/api/publish", {contract:DRAFT}).then(r=>{
-    const box = document.getElementById("publishMsg");
-    if(r.published){ box.innerHTML = `<div class="note ok">Published version ${r.version}. Try it in the Tutor tab.</div>`; getState(); }
-    else { box.innerHTML = "<div class='note bad'>Not published — fix these:</div>" +
-      r.violations.map(v=>`<div class="violation">${v.code}: ${v.detail}</div>`).join(""); }
-  });
+  if(btn){ btn.disabled = true; btn.textContent = "Publishing…"; }
+  const r = await api("/api/publish-course", {course_id:course, title:(c&&c.name)||"", preferences:prefs});
+  if(btn){ btn.disabled = false; btn.textContent = "Publish for students"; }
+  const box = document.getElementById("publishMsg");
+  if(r.published){
+    box.className = "note ok";
+    box.textContent = "Published. Students can use the tutor now — try it in the Tutor preview tab.";
+    getState();
+  } else {
+    box.className = "note bad";
+    box.innerHTML = "Couldn't publish yet:<br>" + (r.violations||[]).map(v=>`\u2022 ${esc(v.detail)}`).join("<br>");
+  }
 }
 
 /* tutor */
 let SESSION = null;
-function syncTutorUnit(){
-  const c = currentCourse(val("tutorCourse"));
-  if(c && !val("tutorUnit")) document.getElementById("tutorUnit").value = "unit_3";
-}
+function syncTutorUnit(){ /* current unit is inferred from published material */ }
 async function sendTutor(){
   const text = val("message"); if(!text.trim()) return;
   const attempt_image = await readAttemptImage();
@@ -418,7 +393,7 @@ async function sendTutor(){
   const pending = addMsg("tutor", "thinking… (the live model can take a few seconds)");
   pending.style.opacity = "0.6";
   const r = await api("/api/tutor", {course_id:val("tutorCourse"), mode:val("tutorMode"),
-    current_unit:val("tutorUnit"), message:text, attempt:val("attempt"),
+    message:text, attempt:val("attempt"),
     attempt_image, session_id:SESSION});
   document.getElementById("sendBtn").disabled = false;
   pending.remove();

@@ -18,7 +18,7 @@ def _two_tenants(session):
 
 def test_other_tenant_rows_are_invisible(session):
     repo_a, repo_b = _two_tenants(session)
-    repo_b.add(Course(id="course_b", name="B course", subject="math"))
+    repo_b.add(Course(id="course_b", name="B course"))
     repo_b.flush()
 
     # Tenant A cannot see tenant B's course, even by primary key.
@@ -31,7 +31,7 @@ def test_other_tenant_rows_are_invisible(session):
 
 def test_add_stamps_repository_tenant(session):
     repo_a, _ = _two_tenants(session)
-    course = Course(id="course_a", name="A course", subject="math")
+    course = Course(id="course_a", name="A course")
     repo_a.add(course)
     repo_a.flush()
     assert course.tenant_id == "school_a"
@@ -39,7 +39,7 @@ def test_add_stamps_repository_tenant(session):
 
 def test_cross_tenant_write_is_refused(session):
     repo_a, _ = _two_tenants(session)
-    foreign = Course(id="course_x", tenant_id="school_b", name="X", subject="math")
+    foreign = Course(id="course_x", tenant_id="school_b", name="X")
     try:
         repo_a.add(foreign)
     except CrossTenantWrite:
