@@ -203,6 +203,7 @@ def test_correction_creates_evaluation_case(repo, audit, contract_service, seede
 def test_raw_transcript_access_requires_reason_and_is_audited(repo, audit):
     repo.add(TutorSession(id="s1", course_id="math_demo", student_id="stu_0",
                           mode="practice", contract_version_id="cc_math51_unit3_v1"))
+    repo.flush()  # persist parent before child (Postgres enforces the FK)
     repo.add(TutorMessage(id="m1", session_id="s1", contract_version_id="cc_math51_unit3_v1",
                           student_message="help", response_text="hint", hint_level=2, outcome="answered"))
     repo.flush()

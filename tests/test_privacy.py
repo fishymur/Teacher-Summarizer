@@ -37,6 +37,7 @@ def seed_message(repo, mid, student_id, age_days, session_id=None):
     if repo.get(TutorSession, session_id) is None:
         repo.add(TutorSession(id=session_id, course_id="math_demo", student_id=student_id,
                               mode="practice", contract_version_id="cc_v1"))
+        repo.flush()  # persist parent before child (Postgres enforces the FK)
     repo.add(TutorMessage(
         id=mid, session_id=session_id, contract_version_id="cc_v1",
         student_message="please help me", response_text="here is a hint",

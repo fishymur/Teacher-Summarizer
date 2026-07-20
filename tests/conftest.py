@@ -7,6 +7,8 @@ is *not yet introduced* until unit 6.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from ccl.contracts.schema import (
@@ -31,13 +33,23 @@ from ccl.data import (
     make_engine,
     make_session_factory,
 )
-from ccl.data.models import Course, SchoolTenant
+from ccl.data.models import Course, SchoolTenant, User
 
 
 @pytest.fixture()
 def session():
-    engine = make_engine()
-    init_db(engine)
+    # Default: fresh in-memory SQLite per test (fast, isolated). Set CCL_TEST_DB
+    # to a Postgres url to run the same suite against Postgres for dialect parity;
+    # tables are dropped/recreated per test to keep isolation.
+    url = os.environ.get("CCL_TEST_DB")
+    if url:
+        engine = make_engine(url)
+        from ccl.data.db import reset_schema
+        init_db(engine)       # import + register all models (full FK graph)
+        reset_schema(engine)  # drop_all + create_all -> clean, isolated per test
+    else:
+        engine = make_engine()
+        init_db(engine)
     Session = make_session_factory(engine)
     s = Session()
     yield s
@@ -46,11 +58,18 @@ def session():
 
 @pytest.fixture()
 def repo(session):
-    # Seed one tenant + course.
+    # Seed one tenant + the demo users (referenced as approver/actor) + course.
     tenant = SchoolTenant(id="school_demo", name="Demo School")
     session.add(tenant)
     session.flush()
     r = TenantRepository(session, tenant_id="school_demo")
+    # Seed every user id the test fixtures reference as a foreign key target
+    # (approver, role/enrollment user). SQLite ignored these FKs; Postgres enforces
+    # them, so the referenced users must exist.
+    for uid in ("teacher_demo", "student_demo", "user_teacher_123", "t1", "stu_1", "t9"):
+        r.add(User(id=uid, tenant_id="school_demo",
+                   email=f"{uid}@demo.school", display_name=uid))
+    r.flush()
     r.add(Course(id="math_demo", name="Math 51", subject="mathematics"))
     r.flush()
     return r

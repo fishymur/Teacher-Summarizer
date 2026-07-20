@@ -26,7 +26,7 @@ from ..providers.base import GenerateRequest, LLMProvider
 from .classifier import RequestType, classify
 from .injection import scan_chunks
 from .planner import plan_hint
-from .retrieval import KeywordRetriever
+from .retrieval import make_retriever
 from .verifier import VerifierResult, verify
 
 SAFE_FALLBACK = (
@@ -86,7 +86,7 @@ class TutorOrchestrator:
         self._audit = audit
         self._provider = provider
         self._engine = engine or PolicyEngine()
-        self._retriever = KeywordRetriever(repo)
+        self._retriever = make_retriever(repo)
         # Optional provider governance. When supplied, the runtime refuses to
         # call a model that is not registered and approved (fail closed).
         self._registry = registry

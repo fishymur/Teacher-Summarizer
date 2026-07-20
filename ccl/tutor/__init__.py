@@ -7,13 +7,15 @@ from .orchestrator import (
     Turn,
 )
 from .planner import Plan, is_meaningful_attempt, plan_hint
-from .retrieval import KeywordRetriever
+from .retrieval import KeywordRetriever, VectorRetriever, make_retriever
 from .verifier import VerifierCheck, VerifierResult, verify
 
 __all__ = [
     "classify",
     "RequestType",
     "KeywordRetriever",
+    "VectorRetriever",
+    "make_retriever",
     "plan_hint",
     "Plan",
     "is_meaningful_attempt",

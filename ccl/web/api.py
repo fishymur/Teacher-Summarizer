@@ -21,7 +21,8 @@ from ..data import (
     AuditLog, ContractService, MaterialService, TenantRepository,
     init_db, make_engine, make_session_factory,
 )
-from ..data.models import Course, CurriculumContractRow, SchoolTenant
+from ..data.db import read_schema_version, reset_schema, stamp_schema_version
+from ..data.models import Course, CurriculumContractRow, SchoolTenant, User
 from ..evals import EvaluationHarness, GOLDEN_MATH51
 from ..insights import WeeklyBriefBuilder
 from ..providers import AnthropicProvider, RuleAwareStubProvider
@@ -51,13 +52,43 @@ def _seed_contract() -> CurriculumContract:
     )
 
 
+# Bump when the ORM schema or seeded-data shape changes incompatibly. A
+# persistent DB (SQLite file or Postgres) carrying a different version is reset
+# — tables dropped/recreated and re-seeded — rather than allowed to mismatch.
+SCHEMA_VERSION = 1
+
+
+def _is_memory(url: str) -> bool:
+    return ":memory:" in url or not url.strip()
+
+
 class AppState:
-    def __init__(self) -> None:
-        engine = make_engine()
+    def __init__(self, db_url: str = "sqlite+pysqlite:///:memory:") -> None:
+        # Default is in-memory SQLite so tests each get a fresh, isolated DB. The
+        # server passes a persistent url (a SQLite file locally, or Postgres in
+        # production) so work survives a restart.
+        self.db_url = db_url
+        self._persistent = not _is_memory(db_url)
+
+        engine = make_engine(db_url)
         init_db(engine)
         self.session = make_session_factory(engine)()
-        self.session.add(SchoolTenant(id="school_demo", name="Demo School"))
-        self.session.flush()
+
+        # Dialect-neutral schema-version guard. On a persistent DB, a stored
+        # version that differs from SCHEMA_VERSION means the on-disk schema is
+        # stale, so drop/recreate for a clean seed. In-memory DBs are always
+        # fresh (version is None), so they simply get stamped.
+        stored = read_schema_version(self.session)
+        if stored is not None and stored != SCHEMA_VERSION and self._persistent:
+            print(f"[ccl] Database schema changed (found v{stored}, need "
+                  f"v{SCHEMA_VERSION}); resetting for a clean seed.")
+            self.session.close()
+            reset_schema(engine)
+            self.session = make_session_factory(engine)()
+            stored = None
+        if stored is None:
+            stamp_schema_version(self.session, SCHEMA_VERSION)
+
         self.repo = TenantRepository(self.session, "school_demo")
         self.audit = AuditLog(self.repo)
         self.materials = MaterialService(self.repo, self.audit)
@@ -82,7 +113,25 @@ class AppState:
         self._teacher = Principal("teacher_demo", "school_demo", (RoleGrant(Role.TEACHER, None),))
         self._student = Principal("student_demo", "school_demo", (RoleGrant(Role.STUDENT, None),))
 
-        # Seed an example course so the Tutor works immediately.
+        # Seed the demo data only on first run. On a persistent (file) DB a later
+        # start finds the tenant already present and skips seeding entirely —
+        # re-seeding would collide with unique ids and the append-only/immutable
+        # listeners (SourceChunk, AuditEvent). A fresh in-memory DB (tests, and
+        # the default) is always empty here, so it always seeds.
+        if self.session.get(SchoolTenant, "school_demo") is None:
+            self._seed()
+            self.persist()
+
+    def _seed(self) -> None:
+        # Tenant first, then the demo users referenced as approver/actor (Postgres
+        # enforces these foreign keys; SQLite did not), then an example course.
+        self.session.add(SchoolTenant(id="school_demo", name="Demo School"))
+        self.session.flush()
+        self.repo.add(User(id="teacher_demo", tenant_id="school_demo",
+                           email="teacher@demo.school", display_name="Demo Teacher"))
+        self.repo.add(User(id="student_demo", tenant_id="school_demo",
+                           email="student@demo.school", display_name="Demo Student"))
+        self.repo.flush()
         self.repo.add(Course(id="math_demo", name="Math 51", subject="mathematics"))
         self.repo.flush()
         self.materials.ingest(
@@ -94,6 +143,19 @@ class AppState:
         self.contracts.validate("math_demo_v1")
         self.contracts.approve("math_demo_v1", approved_by="teacher_demo")
         self.contracts.publish("math_demo_v1", actor_id="teacher_demo")
+
+    def persist(self) -> None:
+        """Commit the current transaction when backed by a file DB, so seeded and
+        runtime work survives a restart. Services only flush(); without a commit
+        an uncommitted SQLite transaction rolls back on process exit. In-memory
+        DBs (tests) skip this, keeping each test's session isolated."""
+        if self._persistent:
+            self.session.commit()
+
+    def rollback(self) -> None:
+        """Discard a failed transaction so the session stays usable for the next
+        request. No-op-safe on in-memory."""
+        self.session.rollback()
 
     def principal(self, role: str):
         return self._teacher if role == "teacher" else self._student

@@ -128,6 +128,7 @@ def test_workspace_teacher_scoped_to_own_course(repo, audit, seeded_material):
 def _seed_session(repo, session_id, student_id):
     repo.add(TutorSession(id=session_id, course_id="math_demo", student_id=student_id,
                           mode="practice", contract_version_id="cc_math51_unit3_v1"))
+    repo.flush()  # persist parent before child (Postgres enforces the FK)
     repo.add(TutorMessage(id=f"m_{session_id}", session_id=session_id,
                           contract_version_id="cc_math51_unit3_v1",
                           student_message="help", response_text="hint",
