@@ -38,6 +38,9 @@ class GenerateRequest:
     forbidden_method_terms: dict[str, list[str]] = field(default_factory=dict)
     allowed_chunks: list[RetrievedChunk] = field(default_factory=list)
     require_citations: bool = True
+    # Source scope: "disabled" (course material only), "teacher_approved_only"
+    # (may lightly supplement), or "enabled" (may use outside knowledge freely).
+    external_sources: str = "teacher_approved_only"
     full_solution_allowed: bool = False
     # Present only when a restricted method was requested. Pre-authored by the
     # teacher; the tutor must not teach the restricted method itself.

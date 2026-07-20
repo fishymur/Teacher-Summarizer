@@ -96,10 +96,12 @@ def test_simulate_class_populates_brief():
     assert clusters, "expected the brief to surface a pattern after simulating a class"
 
 
-def test_paste_without_id_or_title_works():
+def test_paste_without_title_is_rejected():
     app = _app()
     r = api.add_material(app, {"course_id": "math_demo", "text": "Just some notes.\n\nAnd more."})
-    assert r["ok"] and r["pages"] == 2  # id/title defaulted, only text required
+    assert "error" in r and "title" in r["error"].lower()  # title is now required
+    r2 = api.add_material(app, {"course_id": "math_demo", "title": "Notes", "text": "Just some notes.\n\nAnd more."})
+    assert r2["ok"] and r2["pages"] == 2
 
 
 def test_paste_empty_text_is_rejected():
@@ -173,3 +175,25 @@ def test_student_role_cannot_reach_teacher_permissions():
     assert not app.controller.can(student, Permission.INSIGHT_VIEW)
     assert app.controller.can(student, Permission.TUTOR_USE)
     assert app.controller.can(teacher, Permission.CONTRACT_PUBLISH)
+
+
+def test_material_requires_title():
+    app = api.AppState()
+    api.create_course(app, {"course_id": "t_course", "name": "T"})
+    # paste with no title -> rejected
+    r = api.add_material(app, {"course_id": "t_course", "title": "", "text": "some notes"})
+    assert "error" in r and "title" in r["error"].lower()
+    # upload text with no title -> rejected
+    r2 = api.upload_material(app, {"course_id": "t_course", "title": "  ", "kind": "text", "text": "x"})
+    assert "error" in r2 and "title" in r2["error"].lower()
+    # with a title -> ok
+    r3 = api.add_material(app, {"course_id": "t_course", "title": "Notes", "text": "some notes"})
+    assert r3.get("ok")
+
+
+def test_image_upload_needs_live_model():
+    app = api.AppState()  # offline stub -> app.vision is False
+    api.create_course(app, {"course_id": "img_course", "name": "I"})
+    r = api.upload_material(app, {"course_id": "img_course", "title": "Photo",
+                                  "kind": "image", "media_type": "image/png", "data_b64": "AAAA"})
+    assert "error" in r and "live model" in r["error"].lower()

@@ -87,7 +87,14 @@ class AnthropicProvider:
             "full_solution_allowed": req.full_solution_allowed,
             "boundary_message": req.boundary_message,
         }
+        scope_rule = {
+            "disabled": "Answer ONLY from the approved course material above. Do not introduce outside facts.",
+            "teacher_approved_only": "Ground your answer in the approved course material above. You may add limited, well-established general knowledge to clarify, but the material is the authority.",
+            "enabled": "You may draw on general knowledge in addition to the approved material; still prefer and cite the material where it applies.",
+        }.get(req.external_sources)
         text = json.dumps(payload, ensure_ascii=False)
+        if scope_rule:
+            text += f"\n\nSource policy: {scope_rule}"
         if req.revision_feedback:
             text += f"\n\nYour previous attempt failed these checks: {req.revision_feedback}. Fix them."
         return text
@@ -218,6 +225,39 @@ class AnthropicProvider:
         except Exception:  # noqa: BLE001
             return ""
         return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+    def transcribe_images(self, images: list[dict], *, instructions: str) -> list[str]:
+        """Transcribe text from images via the vision model. ``images`` is a list
+        of ``{"media_type","data_b64"}``; returns one transcription per image
+        (empty string for any that fail). Synchronous; used for material uploads
+        (photos, scanned pages), not the tutor loop. Returns [] with no API key."""
+        if not self._api_key:
+            return []
+        out: list[str] = []
+        for img in images:
+            content = [
+                {"type": "image", "source": {
+                    "type": "base64",
+                    "media_type": img.get("media_type", "image/png"),
+                    "data": img.get("data_b64", "")}},
+                {"type": "text", "text": instructions},
+            ]
+            body = json.dumps({
+                "model": self._model_id, "max_tokens": 4000,
+                "messages": [{"role": "user", "content": content}],
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                API_URL, data=body,
+                headers={"x-api-key": self._api_key, "anthropic-version": ANTHROPIC_VERSION,
+                         "content-type": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                out.append("".join(b.get("text", "") for b in data.get("content", [])
+                                   if b.get("type") == "text"))
+            except Exception:  # noqa: BLE001
+                out.append("")
+        return out
 
     def data_policy(self) -> ProviderDataPolicy:
         return ProviderDataPolicy(

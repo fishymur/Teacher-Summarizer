@@ -200,7 +200,15 @@ def create_course(app: AppState, body: dict) -> dict:
     return {"ok": True, "course_id": cid}
 
 
+_TRANSCRIBE = (
+    "Transcribe all text and math from this image exactly as written, preserving "
+    "structure (headings, lists, equations). Write math in plain text or LaTeX. "
+    "Output only the transcribed content, with no commentary.")
+
+
 def add_material(app: AppState, body: dict) -> dict:
+    if not (body.get("title") or "").strip():
+        return {"error": "Please enter a title for this material first."}
     text = body.get("text", "").strip()
     if not text:
         return {"error": "Paste some material text first."}
@@ -208,16 +216,31 @@ def add_material(app: AppState, body: dict) -> dict:
 
 
 def upload_material(app: AppState, body: dict) -> dict:
-    """Accept an uploaded file. Text files arrive as text; PDFs as base64."""
+    """Accept an uploaded file. Text arrives as text; PDFs as base64; images as
+    base64 (read by the vision model). Scanned PDFs (no text layer) also fall back
+    to the vision model."""
+    if not (body.get("title") or "").strip():
+        return {"error": "Please enter a title for this material first."}
     kind = body.get("kind", "text")
+
+    if kind == "image":
+        if not app.vision:
+            return {"error": "Reading photos or images needs the live model. "
+                             "Set ANTHROPIC_API_KEY and restart, then re-upload."}
+        img = {"media_type": body.get("media_type", "image/png"), "data_b64": body.get("data_b64", "")}
+        texts = app.provider.transcribe_images([img], instructions=_TRANSCRIBE)
+        text = (texts[0] if texts else "").strip()
+        if not text:
+            return {"error": "Couldn't read any text from that image."}
+        return _ingest_text(app, body, text, kind="image")
+
     if kind == "pdf":
         import base64
         import io
         try:
             import pypdf
         except ImportError:
-            return {"error": "PDF reading needs the pypdf package. In your terminal run:  "
-                             "pip install pypdf   — then restart the app (python -m ccl.web)."}
+            return {"error": "PDF reading needs the pypdf package (pip install pypdf), then restart."}
         try:
             raw = base64.b64decode(body["data_b64"])
             reader = pypdf.PdfReader(io.BytesIO(raw))
@@ -229,15 +252,46 @@ def upload_material(app: AppState, body: dict) -> dict:
             if t:
                 chunks.append((f"p{i+1}", "page", t))
         if not chunks:
-            return {"error": "No text found in that PDF — it may be scanned images (needs OCR, not yet supported)."}
-        title = (body.get("title") or "Uploaded PDF").strip()
+            chunks = _transcribe_scanned_pdf(app, raw)
+            if isinstance(chunks, dict):  # error dict
+                return chunks
+        title = body["title"].strip()
         material_id = (body.get("material_id") or _unique_material_id(app, title)).strip()
         app.materials.ingest(
             material_id=material_id, course_id=body["course_id"],
             title=title, kind="pdf",
             anchored_chunks=chunks, actor_id="teacher_demo")
         return {"ok": True, "pages": len(chunks), "material_id": material_id}
+
     return _ingest_text(app, body, body.get("text", "").strip())
+
+
+def _transcribe_scanned_pdf(app: AppState, raw: bytes):
+    """A PDF with no text layer: render pages to images and read them with the
+    vision model. Returns a list of anchored chunks, or an error dict."""
+    if not app.vision:
+        return {"error": "That PDF looks scanned (no selectable text). Reading scanned or "
+                         "handwritten PDFs needs the live model — set ANTHROPIC_API_KEY and "
+                         "restart, then re-upload."}
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return {"error": "Reading scanned PDFs needs the pymupdf package (pip install pymupdf), then restart."}
+    import base64
+    try:
+        doc = fitz.open(stream=raw, filetype="pdf")
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"Couldn't open that PDF: {e}"}
+    images = []
+    for page in doc[:20]:
+        pix = page.get_pixmap(dpi=150)
+        images.append({"media_type": "image/png",
+                       "data_b64": base64.b64encode(pix.tobytes("png")).decode("ascii")})
+    texts = app.provider.transcribe_images(images, instructions=_TRANSCRIBE)
+    chunks = [(f"p{i+1}", "page", tx.strip()) for i, tx in enumerate(texts) if tx.strip()]
+    if not chunks:
+        return {"error": "Couldn't read any text from that scanned PDF."}
+    return chunks
 
 
 def _slug(s: str) -> str:
@@ -257,16 +311,18 @@ def _unique_material_id(app: AppState, title: str) -> str:
     return f"{base}_{i}"
 
 
-def _ingest_text(app: AppState, body: dict, text: str) -> dict:
+def _ingest_text(app: AppState, body: dict, text: str, *, kind: str = "doc") -> dict:
+    if not (body.get("title") or "").strip():
+        return {"error": "Please enter a title for this material first."}
     if not text:
         return {"error": "The file was empty or unreadable."}
-    title = (body.get("title") or "Material").strip()
+    title = body["title"].strip()
     material_id = (body.get("material_id") or _unique_material_id(app, title)).strip()
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()][:60] or [text]
     chunks = [(f"p{i+1}", "page", p) for i, p in enumerate(paragraphs)]
     app.materials.ingest(
         material_id=material_id, course_id=body["course_id"],
-        title=title, kind="doc",
+        title=title, kind=kind,
         anchored_chunks=chunks, actor_id="teacher_demo")
     return {"ok": True, "pages": len(chunks), "material_id": material_id}
 
@@ -377,7 +433,20 @@ def _apply_preferences(draft: CurriculumContract, prefs: dict) -> CurriculumCont
         methods = methods.model_copy(update={"prohibited": [ProhibitedMethod(
             id="prohibited_" + _slug(never), name=never, applies_to=[concept_id])]})
 
+    # Source scope -> external_sources policy + citation strictness.
+    scope_map = {
+        "class_only": ("disabled", True),
+        "some":       ("teacher_approved_only", True),
+        "open":       ("enabled", False),
+    }
+    source_policy = draft.source_policy
+    scope = prefs.get("source_scope")
+    if scope in scope_map:
+        ext, cite = scope_map[scope]
+        source_policy = source_policy.model_copy(update={"external_sources": ext, "require_citations": cite})
+
     return draft.model_copy(update={"pedagogy": ped, "methods": methods,
+                                    "source_policy": source_policy,
                                     "concept_graph_approved": True})
 
 

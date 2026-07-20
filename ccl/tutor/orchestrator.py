@@ -184,6 +184,7 @@ class TutorOrchestrator:
             forbidden_method_terms=forbidden_terms,
             allowed_chunks=chunks,
             require_citations=contract.source_policy.require_citations,
+            external_sources=contract.source_policy.external_sources,
             full_solution_allowed=decision.full_solution_allowed,
             boundary_message=boundary_message,
             attempt_image=attempt_image,

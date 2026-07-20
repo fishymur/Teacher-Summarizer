@@ -4,6 +4,7 @@ pydantic>=2.11,<3
 SQLAlchemy>=2.0,<2.1
 psycopg[binary]>=3.2   # PostgreSQL driver (production DB; SQLite needs no driver)
 pypdf>=5.0        # optional: only needed for PDF material uploads
+pymupdf>=1.24     # optional: renders scanned PDFs to images for vision transcription
 
 # Dev/test only (not needed to run the app):
 #   pytest>=8
