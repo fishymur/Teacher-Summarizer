@@ -25,6 +25,16 @@ from .models import (
 from .repository import TenantRepository
 
 
+def _strip_nul(text: str) -> str:
+    """Remove NUL (0x00) bytes before persistence.
+
+    PostgreSQL text/varchar columns reject NUL bytes; SQLite silently stored
+    them. PDF and vision text extraction can emit stray NULs, so strip them at
+    the single ingestion chokepoint every upload path passes through.
+    """
+    return text.replace("\x00", "") if text else text
+
+
 class MaterialService:
     def __init__(self, repo: TenantRepository, audit: AuditLog) -> None:
         self._repo = repo
@@ -46,6 +56,10 @@ class MaterialService:
         Real ingestion parses a PDF/slide deck; here the parsed output is passed
         in so the milestone stays free of a PDF dependency.
         """
+        # Sanitize before the checksum so stored text and its checksum agree.
+        anchored_chunks = [
+            (label, kind_, _strip_nul(text)) for label, kind_, text in anchored_chunks
+        ]
         material = self._repo.get(Material, material_id)
         if material is None:
             material = Material(

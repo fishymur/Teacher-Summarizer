@@ -10,7 +10,7 @@
 > is enabled — see "Keeping this file current"). Do not hand-edit inside the markers.
 
 <!-- AUTOGEN:START -->
-_Snapshot generated 2026-07-20 18:32 UTC. Facts below are derived from the code; the narrative sections outside the markers are hand-maintained._
+_Snapshot generated 2026-07-21 16:39 UTC. Facts below are derived from the code; the narrative sections outside the markers are hand-maintained._
 
 **Environment variables referenced in code:** ANTHROPIC_API_KEY, CCL_ACCESS_PASSWORD, CCL_DB, CCL_EMBED, CCL_PORT, CCL_RETRIEVAL, CCL_TUTOR_MODEL, DATABASE_URL, HOST, PORT
 
@@ -25,7 +25,7 @@ pypdf>=5.0        # optional: only needed for PDF material uploads
 pymupdf>=1.24     # optional: renders scanned PDFs to images for vision transcription
 ```
 
-**Test files (21):** test_access_control.py, test_audit.py, test_classifier_planner.py, test_compiler.py, test_contract_validation.py, test_evaluation_harness.py, test_injection_battery.py, test_insights.py, test_lifecycle_versioning.py, test_materials_anchors.py, test_memory.py, test_orchestrator.py, test_policy_engine.py, test_privacy.py, test_provider_registry.py, test_providers.py, test_retrieval.py, test_tenant_isolation.py, test_vector_retrieval.py, test_verifier.py, test_web_api.py
+**Test files (22):** test_access_control.py, test_audit.py, test_classifier_planner.py, test_compiler.py, test_contract_validation.py, test_evaluation_harness.py, test_injection_battery.py, test_insights.py, test_lifecycle_versioning.py, test_materials_anchors.py, test_memory.py, test_nul_sanitization.py, test_orchestrator.py, test_policy_engine.py, test_privacy.py, test_provider_registry.py, test_providers.py, test_retrieval.py, test_tenant_isolation.py, test_vector_retrieval.py, test_verifier.py, test_web_api.py
 
 **ccl/ source files:**
 ```
